@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PUMPTRACK V1</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--text:#17212b;--muted:#66727e;--line:#dfe4e8;--accent:#1565c0;--green:#218838;--orange:#d97706;--red:#c62828}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:var(--bg);color:var(--text)}
+header{background:#17212b;color:white;padding:16px 18px;position:sticky;top:0;z-index:5}header h1{margin:0;font-size:24px}header small{color:#c8d0d7}
+nav{display:flex;gap:8px;padding:10px;background:white;border-bottom:1px solid var(--line);position:sticky;top:69px;z-index:4;overflow:auto}
+button{border:0;border-radius:8px;padding:11px 14px;font-weight:bold;cursor:pointer;background:#e9eef2;color:#17212b}
+button.primary{background:var(--accent);color:white}.danger{background:#fee2e2;color:#991b1b}.success{background:#dcfce7;color:#166534}
+main{max-width:1000px;margin:auto;padding:16px}.view{display:none}.view.active{display:block}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:12px}
+.stat{font-size:28px;font-weight:bold}.muted{color:var(--muted);font-size:13px}
+label{display:block;font-weight:bold;font-size:14px;margin:12px 0 6px}input,textarea,select{width:100%;padding:12px;border:1px solid #cbd3da;border-radius:8px;font-size:16px;background:white}textarea{min-height:90px;resize:vertical}
+.formgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:4px 12px}
+.job{cursor:pointer}.job:hover{border-color:#9dbbd8}.pill{display:inline-block;padding:5px 8px;border-radius:999px;font-size:12px;font-weight:bold;background:#e9eef2;margin:2px}.pill.green{background:#dcfce7;color:#166534}.pill.orange{background:#ffedd5;color:#9a3412}.pill.red{background:#fee2e2;color:#991b1b}
+.location{font-weight:bold;color:var(--accent)}.photo-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px}.photo-grid img{width:100%;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.between{display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap}
+.timeline{border-left:3px solid #dbe3ea;padding-left:14px;margin:10px 0}.event{margin-bottom:14px}.event strong{display:block}.empty{text-align:center;padding:30px;color:var(--muted)}
+.notice{background:#eef6ff;border:1px solid #bfdbfe;border-radius:10px;padding:12px;margin-bottom:14px}
+@media(max-width:600px){main{padding:10px}.card{padding:13px}header{padding:13px}nav{top:62px}}
+</style>
+</head>
+<body>
+<header><h1>🔧 PUMPTRACK</h1><small>V1 • Workshop Job & Part Tracking</small></header>
+<nav>
+<button onclick="show('dashboard')">Dashboard</button>
+<button class="primary" onclick="newJob()">＋ New Job</button>
+<button onclick="show('find')">🔎 Find</button>
+</nav>
+<main>
+<section id="dashboard" class="view active">
+<div class="notice"><b>Simple idea:</b> Find the job → see the photo → see exactly where it is now → update it when it moves.</div>
+<div class="grid">
+<div class="card"><div class="muted">TOTAL JOBS</div><div class="stat" id="total">0</div></div>
+<div class="card"><div class="muted">IN WORKSHOP</div><div class="stat" id="active">0</div></div>
+<div class="card"><div class="muted">READY</div><div class="stat" id="ready">0</div></div>
+<div class="card"><div class="muted">PROBLEMS</div><div class="stat" id="problems">0</div></div>
+</div>
+<div class="between"><h2>Current Jobs</h2><button onclick="render()">↻ Refresh</button></div>
+<div id="jobList"></div>
+</section>
+
+<section id="find" class="view">
+<div class="card">
+<h2>Find a Job / Part</h2>
+<input id="search" placeholder="Job number, client, description or location..." oninput="renderFind()">
+</div>
+<div id="findList"></div>
+</section>
+
+<section id="editor" class="view">
+<div class="card">
+<div class="between"><h2 id="editorTitle">New Job</h2><button onclick="show('dashboard')">✕ Close</button></div>
+<div class="formgrid">
+<div><label>Job Number *</label><input id="jobNo" placeholder="e.g. JOB-1025"></div>
+<div><label>Client Name *</label><input id="client" placeholder="e.g. ABC Mining"></div>
+<div><label>Description *</label><input id="desc" placeholder="e.g. Pump shaft / Element"></div>
+<div><label>Current Workshop Location</label><select id="location"></select></div>
+<div><label>Machine / Person Working On Job</label><input id="machinePerson" placeholder="e.g. Honor VL-8DH / John"></div>
+<div><label>Status</label><select id="status"><option>In Progress</option><option>Awaiting Inspection</option><option>Repair Required</option><option>Ready</option><option>Completed</option></select></div>
+</div>
+<label>Notes</label><textarea id="notes" placeholder="Anything important about the job..."></textarea>
+<label>Photos</label>
+<input id="photos" type="file" accept="image/*" multiple capture="environment">
+<div id="preview" class="photo-grid" style="margin-top:10px"></div>
+<div class="row" style="margin-top:14px"><button class="primary" onclick="saveJob()">💾 Save Job</button><button onclick="clearEditor()">Clear</button></div>
+</div>
+</section>
+
+<section id="detail" class="view">
+<div id="detailContent"></div>
+</section>
+</main>
+<script>
+const LOCS=['Received','Stripping','Cleaning','Inspection','Welding / Repair','CNC','Grinding','Assembly','QC','Finished','Ready for Collection'];
+let jobs=JSON.parse(localStorage.getItem('pumptrack_v1_jobs')||'[]');
+let editing=null, pendingPhotos=[];
+
+function save(){localStorage.setItem('pumptrack_v1_jobs',JSON.stringify(jobs));}
+function show(id){document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));document.getElementById(id).classList.add('active');window.scrollTo(0,0);if(id==='dashboard')render();if(id==='find')renderFind();}
+function init(){
+ const s=document.getElementById('location');s.innerHTML=LOCS.map(x=>`<option>${x}</option>`).join('');
+ document.getElementById('photos').addEventListener('change',previewFiles);
+ render();
+}
+function newJob(){editing=null;pendingPhotos=[];clearEditor();document.getElementById('editorTitle').textContent='New Job';show('editor');}
+function clearEditor(){
+ document.getElementById('jobNo').value='';document.getElementById('client').value='';document.getElementById('desc').value='';
+ document.getElementById('notes').value='';document.getElementById('location').value='Received';document.getElementById('machinePerson').value='';document.getElementById('status').value='In Progress';
+ document.getElementById('photos').value='';document.getElementById('preview').innerHTML='';pendingPhotos=[];
+}
+function previewFiles(e){
+ pendingPhotos=[];
+ [...e.target.files].forEach(file=>{const r=new FileReader();r.onload=ev=>{pendingPhotos.push(ev.target.result);document.getElementById('preview').innerHTML=pendingPhotos.map(x=>`<img src="${x}">`).join('')};r.readAsDataURL(file)});
+}
+function saveJob(){
+ const jobNo=document.getElementById('jobNo').value.trim(), client=document.getElementById('client').value.trim(), desc=document.getElementById('desc').value.trim();
+ if(!jobNo||!client||!desc){alert('Please enter Job Number, Client Name and Description.');return}
+ if(editing){
+  const j=jobs.find(x=>x.id===editing);j.jobNo=jobNo;j.client=client;j.desc=desc;j.notes=document.getElementById('notes').value;
+  j.machinePerson=document.getElementById('machinePerson').value.trim();
+  const newLoc=document.getElementById('location').value,newStatus=document.getElementById('status').value;
+  if(j.location!==newLoc){j.location=newLoc;j.history.unshift({time:new Date().toISOString(),location:newLoc,action:'Location updated'});}
+  j.status=newStatus;if(pendingPhotos.length)j.photos.push(...pendingPhotos);
+ }else{
+  const now=new Date().toISOString();
+  jobs.unshift({id:Date.now().toString(),jobNo,client,desc,notes:document.getElementById('notes').value,location:document.getElementById('location').value,machinePerson:document.getElementById('machinePerson').value.trim(),status:document.getElementById('status').value,photos:pendingPhotos,created:now,history:[{time:now,location:document.getElementById('location').value,action:'Job created'}]});
+ }
+ save();show('dashboard');alert('Job saved.');
+}
+function badge(status){let c=status==='Ready'||status==='Completed'?'green':status==='Repair Required'?'red':'orange';return `<span class="pill ${c}">${status}</span>`}
+function card(j){return `<div class="card job" onclick="openJob('${j.id}')"><div class="between"><div><b>${esc(j.jobNo)}</b><div>${esc(j.client)}</div><div class="muted">${esc(j.desc)}</div></div><div>${badge(j.status)}</div></div><hr><div>📍 <span class="location">${esc(j.location)}</span></div>${j.machinePerson?`<div style="margin-top:6px">🔧 <b>Machine / Person:</b> ${esc(j.machinePerson)}</div>`:""}${j.photos?.length?`<div class="muted" style="margin-top:6px">📷 ${j.photos.length} photo(s)</div>`:''}</div>`}
+function render(){
+ document.getElementById('total').textContent=jobs.length;
+ document.getElementById('active').textContent=jobs.filter(j=>!['Completed','Ready'].includes(j.status)).length;
+ document.getElementById('ready').textContent=jobs.filter(j=>['Ready','Completed'].includes(j.status)).length;
+ document.getElementById('problems').textContent=jobs.filter(j=>j.status==='Repair Required').length;
+ document.getElementById('jobList').innerHTML=jobs.length?jobs.map(card).join(''):`<div class="card empty">No jobs yet.<br><br><button class="primary" onclick="newJob()">＋ Create your first job</button></div>`;
+}
+function renderFind(){
+ const q=(document.getElementById('search')?.value||'').toLowerCase();
+ const arr=jobs.filter(j=>[j.jobNo,j.client,j.desc,j.location,j.status].join(' ').toLowerCase().includes(q));
+ document.getElementById('findList').innerHTML=arr.length?arr.map(card).join(''):`<div class="card empty">No matching jobs.</div>`;
+}
+function openJob(id){
+ const j=jobs.find(x=>x.id===id);if(!j)return;
+ document.getElementById('detailContent').innerHTML=`
+ <div class="card">
+  <div class="between"><div><h2 style="margin-bottom:4px">${esc(j.jobNo)}</h2><b>${esc(j.client)}</b><div class="muted">${esc(j.desc)}</div></div>${badge(j.status)}</div>
+  <hr><h3>📍 Current Location</h3><div style="font-size:22px;font-weight:bold;color:var(--accent)">${esc(j.location)}</div><div style="margin-top:10px">🔧 <b>Machine / Person working on job:</b> ${esc(j.machinePerson||"Not specified")}</div>
+  <div style="margin-top:14px">
+  <label>Update Current Location</label>
+  <div class="row">
+    <select id="moveLocation_${j.id}" style="flex:1;min-width:220px">
+      ${LOCS.map(x=>`<option ${x===j.location?'selected':''}>${esc(x)}</option>`).join('')}
+      <option value="__manual__">✏️ Enter another location...</option>
+    </select>
+  </div>
+  <label>Machine / Person Working On Job</label>
+  <input id="moveMachine_${j.id}" value="${esc(j.machinePerson||'')}" placeholder="e.g. Honor VL-8DH / John">
+  <button class="primary" style="margin-top:10px" onclick="updateLocation('${j.id}')">📍 Update Location</button>
+  <div class="row" style="margin-top:10px">
+    <button onclick="editJob('${j.id}')">✏️ Edit Job</button>
+    <button class="danger" onclick="deleteJob('${j.id}')">Delete</button>
+  </div>
+</div>
+ </div>
+ <div class="card"><h3>📷 Job Photos</h3>${j.photos?.length?`<div class="photo-grid">${j.photos.map(p=>`<img src="${p}">`).join('')}</div>`:'<div class="empty">No photos added yet.</div>'}</div>
+ <div class="card"><h3>📝 Notes</h3><div>${esc(j.notes||'No notes.')}</div></div>
+ <div class="card"><h3>🕒 Movement History</h3><div class="timeline">${j.history.map(h=>`<div class="event"><strong>📍 ${esc(h.location)}</strong><div>${esc(h.action)}</div><small>${new Date(h.time).toLocaleString()}</small></div>`).join('')}</div></div>`;
+ show('detail');
+}
+function updateLocation(id){
+ const j=jobs.find(x=>x.id===id);
+ const select=document.getElementById('moveLocation_'+id);
+ if(!j||!select)return;
+ let chosen=select.value;
+ if(chosen==='__manual__'){
+   chosen=prompt('Enter the workshop location:');
+   if(chosen===null)return;
+   chosen=chosen.trim();
+   if(!chosen){alert('Please enter a location.');return}
+ }
+ const machineInput=document.getElementById('moveMachine_'+id);
+ const machinePerson=(machineInput?.value||'').trim();
+ const locationChanged=chosen!==j.location;
+ const machineChanged=machinePerson!==(j.machinePerson||'');
+ if(!locationChanged && !machineChanged)return;
+ j.location=chosen;
+ j.machinePerson=machinePerson;
+ j.history.unshift({
+   time:new Date().toISOString(),
+   location:chosen,
+   action:locationChanged
+     ? ('Job moved / location updated' + (machinePerson?' • Machine / person: '+machinePerson:''))
+     : ('Machine / person updated' + (machinePerson?' • '+machinePerson:''))
+ });
+ save();
+ openJob(id);
+}
+
+function editJob(id){
+ const j=jobs.find(x=>x.id===id);editing=id;pendingPhotos=[];document.getElementById('editorTitle').textContent='Edit Job';
+ document.getElementById('jobNo').value=j.jobNo;document.getElementById('client').value=j.client;document.getElementById('desc').value=j.desc;document.getElementById('notes').value=j.notes||'';
+ document.getElementById('location').value=j.location;document.getElementById('machinePerson').value=j.machinePerson||'';document.getElementById('status').value=j.status;document.getElementById('preview').innerHTML=(j.photos||[]).map(x=>`<img src="${x}">`).join('');
+ show('editor');
+}
+function deleteJob(id){if(confirm('Delete this job?')){jobs=jobs.filter(j=>j.id!==id);save();show('dashboard')}}
+function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
+init();
+</script>
+</body>
+</html>
